@@ -1,6 +1,16 @@
 "use strict";
 const status = document.querySelector("#status");
 const invitationToken = location.pathname.startsWith("/join/") ? location.pathname.split("/").pop() : null;
+let isSuperuser = false;
+function showTab(users) {
+  const showUsers = users && isSuperuser;
+  document.querySelector("#team").hidden = !showUsers;
+  document.querySelector("#requests-panel").hidden = showUsers;
+  document.querySelector("#users-tab").setAttribute("aria-selected", String(showUsers));
+  document.querySelector("#requests-tab").setAttribute("aria-selected", String(!showUsers));
+  document.querySelector("#users-tab").tabIndex = showUsers ? 0 : -1;
+  document.querySelector("#requests-tab").tabIndex = showUsers ? -1 : 0;
+}
 function report(message, error = false) {
   status.textContent = message;
   status.classList.toggle("error", error);
@@ -13,7 +23,8 @@ async function api(path, options = {}) {
   });
   if (!response.ok) {
     const data = await response.json();
-    if (response.status === 401 && !path.startsWith("/api/auth/")) {
+    if (response.status === 401 && !["/api/auth/login", "/api/auth/enroll", "/api/auth/confirm"].includes(path)
+        && !path.startsWith("/api/auth/invitation/")) {
       clearWorkspace();
       document.querySelector("#login").hidden = false;
       document.querySelector("#logout").hidden = true;
@@ -25,8 +36,9 @@ async function api(path, options = {}) {
 async function refresh() {
   const data = await (await api("/api/admin/requests")).json();
   document.querySelector("#account").textContent = `Signed in as ${data.user.username} (${data.user.is_superuser ? "superuser - all requests" : "your requests only"})`;
-  document.querySelector("#team").hidden = !data.user.is_superuser;
-  if (data.user.is_superuser) await refreshTeam();
+  isSuperuser = data.user.is_superuser;
+  document.querySelector("#users-tab").hidden = !isSuperuser;
+  if (!isSuperuser) showTab(false);
   document.querySelector("#network").textContent = data.local_only
     ? "LOCAL TEST ONLY: these links do not work on another phone. Configure an approved HTTPS public URL before sending them."
     : `Signing address: ${data.public_url}. Verify a link on cellular before sending requests.`;
@@ -76,9 +88,15 @@ function clearWorkspace() {
   document.querySelector("#open").removeAttribute("href");
   document.querySelector("#create").reset();
   document.querySelector("#team").hidden = true;
+  isSuperuser = false;
+  document.querySelector("#users-tab").hidden = true;
+  showTab(false);
   document.querySelector("#team-list").replaceChildren();
   document.querySelector("#new-invitation").hidden = true;
   document.querySelector("#invitation-link").value = "";
+  document.querySelector("#new-user-recovery").hidden = true;
+  document.querySelector("#user-recovery-link").value = "";
+  document.querySelector("#user-recoveries").replaceChildren();
 }
 function clearPairing() {
   document.querySelector("#pairing").hidden = true;
@@ -116,7 +134,8 @@ submitForm("#enroll", async (form) => {
   }
   const data = invitationToken
     ? await jsonApi(`/api/auth/invitation/${encodeURIComponent(invitationToken)}/enroll`, {
-      username: document.querySelector("#join-username").value.trim(), password,
+      username: document.querySelector("#join-username").value.trim(),
+      email: document.querySelector("#join-email").value.trim(), password,
     })
     : await jsonApi("/api/auth/enroll", { key: document.querySelector("#key").value.trim(), password });
   form.reset();
@@ -227,22 +246,109 @@ async function refreshTeam() {
   for (const user of data.users) {
     const article = document.createElement("article");
     const text = document.createElement("p");
-    text.textContent = `${user.username}: ${user.is_superuser ? "Superuser" : user.disabled ? "Disabled" : "Own requests only"}`;
+    text.textContent = `${user.username}: ${user.is_superuser ? "Superuser" : user.disabled ? "Access revoked" : "Active - own requests only"}`;
     article.append(text);
-    if (!user.is_superuser && !user.disabled) {
+    const info = document.createElement("p");
+    info.textContent = `Contact: ${user.email || "Not provided"} | Last login: ${user.last_login ? new Date(user.last_login * 1000).toLocaleString() : "Not recorded"} | Failed logins in 15 minutes: ${user.failed_attempts}${user.failed_attempts >= 10 ? " (locked)" : ""}`;
+    article.append(info);
+    if (!user.is_superuser) {
+      const form = document.createElement("form");
+      form.setAttribute("aria-label", `Edit ${user.username}`);
+      const nameLabel = document.createElement("label");
+      nameLabel.textContent = "Username";
+      const name = document.createElement("input");
+      name.value = user.username;
+      name.required = true;
+      name.minLength = 3;
+      name.maxLength = 40;
+      name.pattern = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
+      nameLabel.append(name);
+      const emailLabel = document.createElement("label");
+      emailLabel.textContent = "Contact email";
+      const email = document.createElement("input");
+      email.type = "email";
+      email.maxLength = 254;
+      email.value = user.email;
+      emailLabel.append(email);
+      const save = document.createElement("button");
+      save.textContent = "Save username/email";
+      form.append(nameLabel, emailLabel, save);
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        save.disabled = true;
+        try {
+          await jsonApi(`/api/auth/users/${user.id}/profile`, { username: name.value.trim(), email: email.value.trim() });
+          await refreshTeam();
+          report("Profile saved. A username change signs the colleague out and revokes unused recovery links. Tell them their new username; their authenticator still works.");
+        } catch (error) { report(error.message, true); }
+        finally { save.disabled = false; }
+      });
+      article.append(form);
       const button = document.createElement("button");
       button.type = "button";
-      button.textContent = `Disable ${user.username}`;
+      button.textContent = user.disabled ? `Restore access for ${user.username}` : `Revoke access for ${user.username}`;
       button.addEventListener("click", async () => {
-        if (!confirm(`Disable ${user.username}? They will be signed out. Their requests will be retained.`)) return;
+        if (!confirm(user.disabled ? `Restore login access for ${user.username}?`
+          : `Revoke access for ${user.username}? They will be signed out and blocked from login. Their requests remain available to you. Recipient signing links are not revoked.`)) return;
         button.disabled = true;
         try {
-          await jsonApi(`/api/auth/users/${user.id}/disable`, {});
+          await jsonApi(`/api/auth/users/${user.id}/${user.disabled ? "enable" : "disable"}`, {});
           await refreshTeam();
-          report(`Disabled ${user.username}. Their requests are retained.`);
+          document.querySelector("#new-user-recovery").hidden = true;
+          document.querySelector("#user-recovery-link").value = "";
+          report(`Access ${user.disabled ? "restored" : "revoked"} for ${user.username}. Their requests are retained.`);
         } catch (error) { button.disabled = false; report(error.message, true); }
       });
       article.append(button);
+      const unlock = document.createElement("button");
+      unlock.type = "button";
+      unlock.textContent = "Unlock failed logins";
+      unlock.addEventListener("click", async () => {
+        unlock.disabled = true;
+        try {
+          await jsonApi(`/api/auth/users/${user.id}/unlock`, {});
+          await refreshTeam();
+          report(`Failed login limit cleared for ${user.username}. ${user.disabled ? "Access remains revoked until restored." : "They can retry with their password and a fresh code."}`);
+        } catch (error) { report(error.message, true); }
+        finally { unlock.disabled = false; }
+      });
+      article.append(unlock);
+      if (!user.disabled) {
+        const label = document.createElement("label");
+        label.textContent = "Account recovery";
+        const select = document.createElement("select");
+        for (const [value, description] of [
+          ["password", "Forgot password (existing authenticator required)"],
+          ["authenticator", "Lost authenticator (current password required)"],
+          ["both", "Lost password AND authenticator (full account reset)"],
+        ]) {
+          const option = document.createElement("option");
+          option.value = value;
+          option.textContent = description;
+          select.append(option);
+        }
+        label.append(select);
+        const recover = document.createElement("button");
+        recover.type = "button";
+        recover.textContent = `Create recovery link for ${user.username}`;
+        recover.addEventListener("click", async () => {
+          const warning = select.value === "both"
+            ? "This full reset link lets its holder replace BOTH password and authenticator. Verify the person's identity and share privately."
+            : "Share the link only with the intended colleague after verifying their identity.";
+          if (!confirm(`Create recovery link for ${user.username}? ${warning} Existing sessions will be signed out and older recovery links revoked.`)) return;
+          recover.disabled = true;
+          try {
+            const result = await jsonApi(`/api/auth/users/${user.id}/recovery`, { kind: select.value });
+            document.querySelector("#user-recovery-link").value = result.link;
+            document.querySelector("#new-user-recovery").hidden = false;
+            document.querySelector("#user-recovery-warning").textContent = `${user.username}: ${warning} Expires ${new Date(result.expires * 1000).toLocaleString()}. No email was sent.`;
+            await refreshRecoveries();
+            report("Recovery link created. Copy it now and send privately. The link works once.");
+          } catch (error) { report(error.message, true); }
+          finally { recover.disabled = false; }
+        });
+        article.append(label, recover);
+      }
     }
     container.append(article);
   }
@@ -250,7 +356,8 @@ async function refreshTeam() {
     const article = document.createElement("article");
     const text = document.createElement("p");
     const expired = invitation.expires * 1000 <= Date.now();
-    text.textContent = `Invitation ${invitation.id.slice(0, 8)}: ${invitation.used_by ? "Accepted" : invitation.revoked ? "Revoked" : expired ? "Expired" : "Pending"}; expires ${new Date(invitation.expires * 1000).toLocaleString()}`;
+    const acceptedUser = data.users.find((user) => user.id === invitation.used_by);
+    text.textContent = `Invitation ${invitation.id.slice(0, 8)}: ${invitation.used_by ? `Accepted by ${acceptedUser ? acceptedUser.username : "account " + invitation.used_by}` : invitation.revoked ? "Revoked" : expired ? "Expired" : "Pending"}; expires ${new Date(invitation.expires * 1000).toLocaleString()}`;
     article.append(text);
     if (!invitation.used_by && !invitation.revoked && !expired) {
       const button = document.createElement("button");
@@ -270,7 +377,64 @@ async function refreshTeam() {
     }
     container.append(article);
   }
+  await refreshRecoveries();
 }
+async function refreshRecoveries() {
+  const data = await (await api("/api/auth/recoveries")).json();
+  const container = document.querySelector("#user-recoveries");
+  container.replaceChildren();
+  for (const item of data.recoveries) {
+    const article = document.createElement("article");
+    const text = document.createElement("p");
+    const expired = item.expires * 1000 <= Date.now();
+    text.textContent = `${item.username} - ${item.kind}: ${item.used_at ? "Completed" : item.revoked ? "Revoked" : expired ? "Expired" : "Pending"}; expires ${new Date(item.expires * 1000).toLocaleString()}`;
+    article.append(text);
+    if (!item.used_at && !item.revoked && !expired) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = "Revoke recovery link";
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        try {
+          await jsonApi(`/api/auth/recoveries/${item.id}/revoke`, {});
+          document.querySelector("#new-user-recovery").hidden = true;
+          document.querySelector("#user-recovery-link").value = "";
+          await refreshRecoveries();
+          report("Recovery link revoked.");
+        } catch (error) { button.disabled = false; report(error.message, true); }
+      });
+      article.append(button);
+    }
+    container.append(article);
+  }
+}
+document.querySelector("#requests-tab").addEventListener("click", () => showTab(false));
+document.querySelector("#users-tab").addEventListener("click", async () => {
+  if (!isSuperuser) return;
+  showTab(true);
+  try { await refreshTeam(); }
+  catch (error) { report(error.message, true); }
+});
+document.querySelector(".tabs").addEventListener("keydown", (event) => {
+  if (!isSuperuser || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  event.preventDefault();
+  const users = event.key === "End" || (event.key !== "Home" && document.querySelector("#team").hidden);
+  const tab = document.querySelector(users ? "#users-tab" : "#requests-tab");
+  tab.focus();
+  tab.click();
+});
+document.querySelector("#refresh-users").addEventListener("click", () => {
+  refreshTeam().catch((error) => report(error.message, true));
+});
+document.querySelector("#copy-user-recovery").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(document.querySelector("#user-recovery-link").value);
+    report("Recovery link copied. Send it privately to the intended colleague.");
+  } catch {
+    document.querySelector("#user-recovery-link").select();
+    report("Clipboard unavailable. Select and copy the recovery link manually.", true);
+  }
+});
 document.querySelector("#invite").addEventListener("click", async (event) => {
   event.target.disabled = true;
   try {
@@ -300,6 +464,7 @@ async function initialize() {
     document.querySelector("#key").required = false;
     document.querySelector("#join-username-label").hidden = false;
     document.querySelector("#join-username").required = true;
+    document.querySelector("#join-email-label").hidden = false;
     document.querySelector("#setup").hidden = false;
     report("Choose your username and password, then pair your authenticator.");
     return;

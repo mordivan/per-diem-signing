@@ -20,7 +20,10 @@ the terminal (also in `admin-key.txt` in the private data directory).
 After confirmation the setup key stops authorizing access. Use your username
 (`admin` for the original superuser), password and a Microsoft/Google Authenticator
 code from any device. The superuser can invite colleagues, who see only their
-own requests. Save the one-time
+own requests. The superuser's **Users** tab manages contact details, username
+changes, access revocation/restoration, login unlock and single-use private
+credential-recovery links. Email is contact-only; links are sent manually.
+Save the one-time
 recovery codes. See [login and recovery details](../README.md#password-and-authenticator-login).
 Stop the server with Ctrl+C.
 
@@ -84,7 +87,8 @@ Use the same origin for the preview and signing APIs.
   backups. Data is retained until the operator removes it; no automatic
   deletion/retention policy is configured. Never put that directory in Git.
 - Treat signing URLs as secrets. Reverse proxies must redact `/sign/` and
-  `/api/sign/` paths in access logs; server request logging should be disabled.
+  `/api/sign/` paths, plus invitation and recovery-token paths, in access logs;
+  server request logging should be disabled.
 - This is a local working implementation, not a production-hardened public
   signing service. Public deployment, backup/retention policy and real-device
   acceptance testing are required before handling real employee data.
@@ -94,3 +98,11 @@ Use the same origin for the preview and signing APIs.
 ```powershell
 .\.venv\Scripts\python.exe -m pytest per_diem_signing\test_server.py -q -p no:cacheprovider
 ```
+
+## License
+
+Copyright (c) 2026 RSI-Industries. All rights reserved.
+This is proprietary commercial software; see [LICENSE](../LICENSE) and
+[third-party notices](../THIRD_PARTY_NOTICES.md). Access to the repository does
+not grant an open-source license. Billing and license-key enforcement are not
+included.

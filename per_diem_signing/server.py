@@ -32,6 +32,7 @@ from starlette.datastructures import UploadFile
 
 from .template import create_blank_template
 from .auth import Account, Authentication
+from .user_support import support_routes
 
 LOG = logging.getLogger(__name__)
 MAX_FILE = 10 * 1024 * 1024
@@ -303,6 +304,7 @@ def create_app(data_dir: Path, template: Path | None = None, *,
     app.state.admin_key = admin_key
     authentication = Authentication(data_dir, admin_key, public_url)
     app.include_router(authentication.router)
+    app.include_router(support_routes(authentication))
     app.add_middleware(BodyLimit)
 
     @app.middleware("http")
@@ -344,6 +346,10 @@ def create_app(data_dir: Path, template: Path | None = None, *,
     @app.get("/join/{token}", response_class=HTMLResponse)
     def join_page(token: str):
         return (Path(__file__).parent / "static" / "admin.html").read_text(encoding="utf-8")
+
+    @app.get("/recover/{token}", response_class=HTMLResponse)
+    def recovery_page(token: str):
+        return (Path(__file__).parent / "static" / "recover.html").read_text(encoding="utf-8")
 
     @app.get("/api/admin/requests")
     def list_requests(account: Account = Depends(admin)):

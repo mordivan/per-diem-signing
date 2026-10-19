@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Recover your account</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/recover.js" defer></script>
+</head>
+<body><main>
+  <h1>Recover your account</h1>
+  <div id="status" role="status" aria-live="polite">Checking recovery link...</div>
+  <section id="content" hidden>
+    <h2 id="account"></h2>
+    <p id="instructions"></p>
+    <form id="start">
+      <label><span id="password-label">New password</span><input id="password" type="password" required maxlength="128" autocomplete="new-password"></label>
+      <label id="repeat-label">Confirm new password<input id="repeat" type="password" maxlength="128" autocomplete="new-password"></label>
+      <button>Continue recovery</button>
+    </form>
+    <section id="verify" hidden>
+      <section id="pairing" hidden>
+        <p>Scan this QR code with Microsoft Authenticator (Other account) or Google Authenticator. On the same phone, add the manual secret as a time-based account. Do not remove your old entry until recovery succeeds.</p>
+        <img id="qr" alt="New authenticator setup QR code" width="260" height="260">
+        <code id="secret"></code>
+        <p>Keep this setup secret private. This setup step expires in ten minutes.</p>
+      </section>
+      <form id="confirm">
+        <label id="code-label">Authenticator code<input id="code" required inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code"></label>
+        <button>Complete account recovery</button>
+      </form>
+      <button id="restart" type="button" class="secondary">Start recovery again</button>
+    </section>
+  </section>
+  <section id="recovery" hidden>
+    <h2>Save your new recovery codes</h2>
+    <p>These replace all previous recovery codes. Each works once with your password. Save them privately, separate from your phone.</p>
+    <pre id="recovery-codes"></pre>
+    <button id="download" type="button">Download recovery codes</button>
+    <label><input id="saved" type="checkbox"> I saved my recovery codes.</label>
+    <a id="signin" href="/" hidden>Go to sign in</a>
+  </section>
+  <a id="done" href="/" hidden>Go to sign in</a>
+  <footer><small>Copyright (c) 2026 RSI-Industries. All rights reserved.</small></footer>
+</main></body></html>

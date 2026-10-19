@@ -16,6 +16,7 @@
     <form id="enroll">
       <label id="key-label">One-time setup key<input id="key" type="password" required maxlength="256" autocomplete="off"></label>
       <label id="join-username-label" hidden>Choose username<input id="join-username" minlength="3" maxlength="40" pattern="[A-Za-z0-9][A-Za-z0-9._\-]*" autocomplete="username"></label>
+      <label id="join-email-label" hidden>Contact email (optional)<input id="join-email" type="email" maxlength="254" autocomplete="email"></label>
       <label>Create password<input id="new-password" type="password" minlength="12" maxlength="128" required autocomplete="new-password"></label>
       <small>Use at least 12 characters. Save it in your password manager.</small>
       <label>Confirm password<input id="confirm-password" type="password" minlength="12" maxlength="128" required autocomplete="new-password"></label>
@@ -57,9 +58,15 @@
   <section id="workspace" hidden>
     <p id="account"></p>
     <p id="network" class="notice"></p>
-    <section id="team" hidden>
-      <h2>Colleague access</h2>
+    <div class="tabs" role="tablist" aria-label="Workspace sections">
+      <button id="requests-tab" type="button" role="tab" aria-selected="true" aria-controls="requests-panel">Requests</button>
+      <button id="users-tab" type="button" role="tab" aria-selected="false" aria-controls="team" tabindex="-1" hidden>Users</button>
+    </div>
+    <section id="team" role="tabpanel" aria-labelledby="users-tab" hidden>
+      <h2>Users and colleague access</h2>
       <p>You are the superuser and can manage all requests. Colleagues can manage only the requests they create. Invitations expire after 48 hours and work once.</p>
+      <p>Contact email is not a login or verified identity. Recovery links are copied and sent manually. Verify the colleague's identity before sharing a recovery link.</p>
+      <button id="refresh-users" type="button">Refresh users</button>
       <button id="invite" type="button">Create colleague invitation</button>
       <section id="new-invitation" hidden>
         <label>Private invitation link<input id="invitation-link" readonly></label>
@@ -67,7 +74,16 @@
         <p>Send this link privately to your colleague. They choose their username, password and authenticator. This does not send an email automatically.</p>
       </section>
       <div id="team-list"></div>
+      <section id="new-user-recovery" hidden>
+        <h3>Private account recovery link</h3>
+        <label>Recovery link<input id="user-recovery-link" readonly></label>
+        <button id="copy-user-recovery" type="button">Copy recovery link</button>
+        <p id="user-recovery-warning" class="notice"></p>
+      </section>
+      <h3>Account recovery links</h3>
+      <div id="user-recoveries"></div>
     </section>
+    <section id="requests-panel" role="tabpanel" aria-labelledby="requests-tab">
     <h2>Prepare a request</h2>
     <form id="create">
       <div class="grid">
@@ -92,5 +108,7 @@
     </section>
     <h2>Requests</h2><button id="refresh" type="button">Refresh</button>
     <div id="requests"></div>
+    </section>
   </section>
+  <footer><small>Copyright (c) 2026 RSI-Industries. All rights reserved.</small></footer>
 </main></body></html>

@@ -19,7 +19,7 @@ import qrcode
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 SESSION_COOKIE = "perdiem_session"
 PENDING_COOKIE = "perdiem_enrollment"
@@ -46,8 +46,21 @@ class Login(Confirmation):
     username: str = Field(default="admin", min_length=1, max_length=40)
 
 
-class InviteEnrollment(BaseModel):
+class AccountDetails(BaseModel):
     username: str = Field(min_length=3, max_length=40, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+    email: str = Field(default="", max_length=254)
+
+    @field_validator("email")
+    @classmethod
+    def contact_email(cls, value: str) -> str:
+        value = value.strip()
+        if value and (value.count("@") != 1 or any(c.isspace() for c in value)
+                      or not all(value.split("@")) or "." not in value.split("@")[1]):
+            raise ValueError("Enter a valid contact email, or leave it blank.")
+        return value
+
+
+class InviteEnrollment(AccountDetails):
     password: str = Field(min_length=12, max_length=128)
 
 
@@ -96,11 +109,14 @@ class Authentication:
                 "sessions": {"user_id": "INTEGER NOT NULL DEFAULT 1"},
                 "recovery": {"user_id": "INTEGER NOT NULL DEFAULT 1"},
                 "failures": {"scope": "TEXT NOT NULL DEFAULT 'setup'"},
+                "users": {"email": "TEXT NOT NULL DEFAULT ''", "last_login": "REAL"},
             }.items():
                 existing = {row["name"] for row in db.execute(f"PRAGMA table_info({table})")}
                 for column, declaration in columns.items():
                     if column not in existing:
                         db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {declaration}")
+            if "email" not in {row["name"] for row in db.execute("PRAGMA table_info(pending)")}:
+                db.execute("ALTER TABLE pending ADD COLUMN email TEXT NOT NULL DEFAULT ''")
             if db.execute("SELECT 1 FROM sqlite_master WHERE name='administrator'").fetchone():
                 db.execute("""INSERT INTO users
                     (id, username, password_hash, secret, last_counter, is_superuser)
@@ -224,7 +240,7 @@ class Authentication:
         return row
 
     def begin(self, password: str, response: Response, username: str = "admin",
-              invitation_id: str | None = None) -> dict[str, str | int]:
+              invitation_id: str | None = None, email: str = "") -> dict[str, str | int]:
         token = secrets.token_urlsafe(32)
         secret = pyotp.random_base32()
         encoded = HASHER.hash(password)
@@ -238,9 +254,9 @@ class Authentication:
                 raise HTTPException(409, "That username is already in use.")
             db.execute("DELETE FROM pending WHERE expires<=?", (time.time(),))
             db.execute("""INSERT INTO pending
-                (token_hash, password_hash, secret, expires, username, invitation_id)
-                VALUES (?, ?, ?, ?, ?, ?)""",
-                (digest(token), encoded, secret, time.time() + PENDING_SECONDS, username, invitation_id))
+                (token_hash, password_hash, secret, expires, username, invitation_id, email)
+                VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (digest(token), encoded, secret, time.time() + PENDING_SECONDS, username, invitation_id, email))
             self.success(db, f"invite:{invitation_id}" if invitation_id else "setup")
         response.set_cookie(PENDING_COOKIE, token, max_age=PENDING_SECONDS,
                             secure=self.secure, httponly=True, samesite="strict", path="/api/auth")
@@ -294,9 +310,9 @@ class Authentication:
                 if counter is None:
                     raise HTTPException(401, "Incorrect authenticator code. Check your phone's time.")
                 result = db.execute("""INSERT INTO users
-                    (username, password_hash, secret, last_counter, is_superuser) VALUES (?, ?, ?, ?, ?)""",
+                    (username, password_hash, secret, last_counter, is_superuser, email) VALUES (?, ?, ?, ?, ?, ?)""",
                     (pending["username"], pending["password_hash"], pending["secret"], counter,
-                     0 if invitation_id else 1))
+                     0 if invitation_id else 1, pending["email"]))
                 user_id = result.lastrowid
                 if invitation_id:
                     db.execute("UPDATE invitations SET used_by=? WHERE id=?", (user_id, invitation_id))
@@ -333,6 +349,7 @@ class Authentication:
                     db.execute("UPDATE users SET password_hash=? WHERE id=?",
                                (HASHER.hash(body.password), admin["id"]))
                 self.session(db, response, admin["id"])
+                db.execute("UPDATE users SET last_login=? WHERE id=?", (time.time(), admin["id"]))
                 self.success(db, scope)
             return {"authenticated": True, "used_recovery_code": recovery}
 
@@ -348,7 +365,10 @@ class Authentication:
         @router.get("/team")
         def team(account: Account = Depends(self.require_superuser)):
             with self.db() as db:
-                users = db.execute("SELECT id, username, is_superuser, disabled FROM users ORDER BY id").fetchall()
+                users = db.execute("""SELECT id, username, email, is_superuser, disabled, last_login,
+                    (SELECT COUNT(*) FROM failures f WHERE f.scope='login:'||users.username
+                     AND f.occurred>?) AS failed_attempts
+                    FROM users ORDER BY id""", (time.time() - 900,)).fetchall()
                 invitations = db.execute("SELECT id, expires, revoked, used_by FROM invitations ORDER BY rowid DESC").fetchall()
             return {"users": [dict(row) for row in users],
                     "invitations": [dict(row) for row in invitations]}
@@ -375,10 +395,14 @@ class Authentication:
         @router.post("/users/{user_id}/disable", dependencies=[Depends(self.browser_request)])
         def disable(user_id: int, account: Account = Depends(self.require_superuser)):
             with self.db() as db:
+                db.execute("BEGIN IMMEDIATE")
                 result = db.execute("UPDATE users SET disabled=1 WHERE id=? AND is_superuser=0", (user_id,))
                 if not result.rowcount:
                     raise HTTPException(404, "Colleague account not found.")
                 db.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
+                db.execute("UPDATE user_resets SET revoked=1 WHERE user_id=? AND used_at IS NULL", (user_id,))
+                db.execute("""INSERT INTO account_actions (actor_id,user_id,action,occurred)
+                    VALUES (?,?,?,?)""", (account.id, user_id, "access_revoked", time.time()))
             return {"disabled": True}
 
         @router.get("/invitation/{token}")
@@ -396,7 +420,7 @@ class Authentication:
                 raise HTTPException(409, "The username admin is reserved for the superuser.")
             with self.db() as db:
                 invitation = self.invitation(db, token=token)
-            result = self.begin(body.password, response, username, invitation["id"])
+            result = self.begin(body.password, response, username, invitation["id"], body.email)
             with self.db() as db:
                 self.success(db, scope)
             return result

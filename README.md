@@ -103,10 +103,11 @@ Cookies must be enabled. Local HTTP testing uses a separate non-Secure cookie.
 Passwords are Argon2id hashes. Recovery codes and session tokens are stored only
 as hashes. The private `authentication.db` stores the TOTP secret so the server
 can verify codes; protect that directory and its backups with OS permissions
-and encryption. There is no email-based reset or self-service authenticator
-replacement yet. If the phone is lost, recovery codes still allow password-based
-login; do not discard them. Losing both your authenticator and recovery codes,
-or forgetting the password, requires deliberate local administrator recovery.
+and encryption. There is no email delivery or self-service identity recovery.
+If a colleague loses credentials, the superuser can issue a private recovery
+link from the Users tab (below). The superuser cannot reset itself with these
+controls: keep its password, authenticator and recovery codes safe. Losing the
+superuser's required credentials needs deliberate local administrator recovery.
 Do not delete the database as a casual troubleshooting step.
 
 Recipients still use only their private request links; this administrator
@@ -118,37 +119,103 @@ The original account is the **superuser**, username **admin**. Its password,
 authenticator, recovery codes and active sessions are preserved during upgrade.
 All existing requests are owned by this account; no signed documents are changed.
 
-After signing in, use **Colleague access -> Create colleague invitation**.
+After signing in, open **Users -> Create colleague invitation**.
 Copy the private invitation immediately and send it to your intended colleague.
 It expires in **48 hours** and can create **one ordinary account**, never another
 superuser. The app does not send an email or text automatically. Anyone holding
 the invitation can accept it, so share it privately; revoke it if misdirected.
 
 Your colleague opens the link on any device, chooses a username (3-40 letters,
-digits, dots, underscores or hyphens), chooses a password, pairs their own
+digits, dots, underscores or hyphens), optionally supplies a contact email,
+chooses a password, pairs their own
 authenticator and saves their own recovery codes. Usernames are case-insensitive,
 must start with a letter or digit, and `admin` is reserved. Enrollment setup
 expires after ten minutes; restart it from the invitation if needed. The
 invitation is consumed only after successful authenticator confirmation.
 
 - **Superuser:** sees, downloads and revokes everyone's requests, with the owner
-  shown in the list; creates/revokes invitations and disables colleague accounts.
+  shown in the list; manages invitations and colleague access from **Users**.
 - **Colleague:** creates requests and sees/downloads/revokes only their own.
   Ownership is assigned by the server, not chosen in the browser.
 - **Recipient:** unchanged link-only review/sign/upload, without account creation.
   A colleague's request link still allows its intended recipient to sign.
 
-Disabling a colleague immediately invalidates their sessions and prevents
-further login. Their requests and completed workbooks are retained for the
+**Revoke access** immediately invalidates the colleague's sessions, revokes their
+unused account-recovery links and prevents further login. Their requests and completed workbooks are retained for the
 superuser. Existing recipient signing links remain usable until their normal
 expiry or revocation; revoke those requests separately if needed.
-The superuser cannot disable itself. There is no user deletion, re-enabling,
-role reassignment or password/authenticator reset screen yet.
+Use **Restore access** to permit login again. Old sessions and revoked recovery
+links do not become valid again. The superuser cannot revoke its own access.
+There is no user deletion or role reassignment.
+
+### Helping colleagues from any device
+
+Sign in as `admin` and open **Users**. It lists existing accounts and
+pending/accepted/revoked/expired invitations.
+
+- **Save username/email:** changes the colleague's username or optional contact
+  email. Email is unverified contact information, not a login or recovery factor.
+  Renaming preserves the account ID and request ownership, signs the colleague
+  out, clears their old/new username login limits and revokes unused recovery
+  links. Tell them the new username. Their existing authenticator still works,
+  even if its displayed account label has the old username.
+- **Unlock failed logins:** clears that user's 15-minute failed-login limit.
+  This does not restore revoked access or replace forgotten credentials.
+- **Create recovery link:** choose password only (requires the existing
+  authenticator), authenticator only (requires the current password), or both
+  (full account reset). Verify the person's identity before issuing any link.
+  A full reset link alone authorizes replacement of both credentials: treat it
+  as highly sensitive and send it only through a trusted private channel.
+
+Recovery links expire in **one hour**, work once, and are stored only as hashes.
+Copy them immediately; the app cannot retrieve them again or send an email.
+Issuing a link signs out the colleague's existing sessions and supersedes all
+earlier recovery links for that account. It does not change their credentials
+until successful confirmation, or block them from signing in with still-valid
+credentials while the link remains unused. Revoke a misdirected link from the
+recovery-links list. That list shows the latest 100 links.
+
+The colleague opens the link on their phone or computer. Password-only recovery
+requires a new password (at least 12 characters) and a fresh code from the
+existing authenticator. Authenticator-only recovery verifies the current
+password before showing new QR/manual setup. Full recovery sets a new password
+and new authenticator. Authenticator setup must be confirmed within ten minutes
+and before the link expires. Starting again replaces any earlier unfinished
+setup for that same link.
+
+Successful completion revokes every existing session and clears the user's
+failed-login limit. Authenticator replacement invalidates the old authenticator
+and all previous recovery codes, displays ten new recovery codes once, and
+requires signing in again. Password-only recovery leaves the authenticator and
+unused recovery codes unchanged. Recovery does not change request ownership
+or modify workbooks. Revoking access, renaming, or revoking/superseding a link
+also prevents an unfinished recovery from completing.
+
+Successful profile/access/recovery management actions are recorded locally
+with actor/target IDs and timestamps in `authentication.db`. This is an
+operational history, not a tamper-proof audit system. Last-login information
+starts with logins performed after this upgrade; older history is unavailable.
 
 User management requires a fully enrolled superuser session, not the legacy
 setup key. Account authentication stays in `authentication.db`; ownership stays
 in `requests.db`. Back up both databases together before deployment. Schema
 migration runs automatically at startup and preserves original request ownership.
+
+## Commercial licensing
+
+Copyright (c) 2026 **RSI-Industries**. All rights reserved.
+This is proprietary software, not an open-source grant. Use, redistribution,
+modification, or offering copies as a service requires separate written
+authorization from RSI-Industries. See [LICENSE](LICENSE) and
+[third-party notices](THIRD_PARTY_NOTICES.md).
+
+This notice does **not** implement customer license keys, subscription billing,
+entitlements, or multi-tenant SaaS isolation. Colleague accounts belong to one
+installation; they are not separate customer tenants. A commercial rollout
+still needs appropriate customer terms, privacy/security/retention policies,
+dependency-license review and operational safeguards. Have a qualified lawyer
+review the notice and customer agreements before selling; the notice alone
+does not establish rights to employer-owned or third-party materials.
 
 ## Phone links require HTTPS hosting
 

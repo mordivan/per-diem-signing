@@ -6,6 +6,12 @@ build-backend = "setuptools.build_meta"
 name = "per-diem-signing"
 version = "0.1.0"
 description = "Phone-browser signatures and receipt photos in per-payee Excel workbooks"
+license = {file = "LICENSE"}
+authors = [{name = "RSI-Industries"}]
+classifiers = [
+    "License :: Other/Proprietary License",
+    "Private :: Do Not Upload",
+]
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115,<1.0",
@@ -26,6 +32,9 @@ per-diem-signing = "per_diem_signing.__main__:main"
 
 [tool.setuptools.packages.find]
 include = ["per_diem_signing*"]
+
+[tool.setuptools]
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 
 [tool.setuptools.package-data]
 per_diem_signing = ["static/*"]
