@@ -49,10 +49,13 @@ def test_enrollment_hashes_password_disables_key_and_uses_session(environment):
     secret, codes = enroll(client, clock)
     assert len(set(codes)) == 10
     assert client.get("/api/admin/requests").status_code == 200
-    assert client.get("/api/auth/status").json() == {"configured": True, "authenticated": True}
+    assert client.get("/api/auth/status").json() == {
+        "configured": True, "authenticated": True,
+        "user": {"id": 1, "username": "admin", "is_superuser": True},
+    }
     db = sqlite3.connect(folder / "authentication.db")
     try:
-        row = db.execute("SELECT password_hash, secret FROM administrator").fetchone()
+        row = db.execute("SELECT password_hash, secret FROM users WHERE id=1").fetchone()
         assert row[0].startswith("$argon2id$")
         assert PASSWORD not in row[0]
         assert row[1] == secret
@@ -115,7 +118,7 @@ def test_failed_confirmation_can_retry_and_no_secret_public(environment):
                            json={"code": pyotp.TOTP(data["secret"]).at(clock[0])})
     assert response.status_code == 200
     assert client.post("/api/auth/confirm", headers=HEADERS,
-                       json={"code": "123456"}).status_code == 409
+                       json={"code": "123456"}).status_code == 410
 
 
 def test_bruteforce_limit_persists_and_expires(environment):

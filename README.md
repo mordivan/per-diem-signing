@@ -58,7 +58,8 @@ The **Approved By** line is left untouched.
 
 For the existing home-hosted deployment, open
 **https://perdiem.inventorysolution.dev** from any phone or computer. Sign in with
-your administrator password and an authenticator code. No installation needed.
+your username, password and an authenticator code. Your existing account's
+username is **admin**. No installation needed.
 
 To run an independent installation, clone this private repository using your
 GitHub account, then use the startup command. A fresh installation starts with
@@ -84,17 +85,19 @@ Check your employer's policy before installing or hosting software.
    They are displayed once; each works only with your password.
 
 After confirmation, the old setup key no longer authorizes access or enrollment.
-From any device use **password + current authenticator code**, or
-**password + an unused recovery code**. Codes cannot be replayed; wait for the
+From any device use **username + password + current authenticator code**, or
+**username + password + an unused recovery code**. Codes cannot be replayed; wait for the
 next code if you just used one. Keep the phone's date/time set automatically.
-The issuer in your authenticator is **Per Diem Signing**, account Administrator.
+The issuer in your authenticator is **Per Diem Signing**, account your username.
+Existing authenticator entries named Administrator continue working unchanged.
 This is TOTP, not a Microsoft/Google account sign-in or push notification.
 
 Sessions last eight hours, survive server restarts, and are revoked on Sign out.
 On HTTPS, session cookies are Secure, HttpOnly and SameSite=Strict. No password,
 setup key or session token is stored in browser local storage. After ten failed
 authentication attempts within 15 minutes, new attempts are blocked for up to
-15 minutes. This single-administrator limit is global, not per device.
+15 minutes. Login limits are per username, so a colleague's failed attempts do
+not lock out the superuser. Setup and invitation attempts have separate limits.
 Cookies must be enabled. Local HTTP testing uses a separate non-Secure cookie.
 
 Passwords are Argon2id hashes. Recovery codes and session tokens are stored only
@@ -108,6 +111,44 @@ Do not delete the database as a casual troubleshooting step.
 
 Recipients still use only their private request links; this administrator
 authentication does not verify recipient identity.
+
+## Superuser and colleague accounts
+
+The original account is the **superuser**, username **admin**. Its password,
+authenticator, recovery codes and active sessions are preserved during upgrade.
+All existing requests are owned by this account; no signed documents are changed.
+
+After signing in, use **Colleague access -> Create colleague invitation**.
+Copy the private invitation immediately and send it to your intended colleague.
+It expires in **48 hours** and can create **one ordinary account**, never another
+superuser. The app does not send an email or text automatically. Anyone holding
+the invitation can accept it, so share it privately; revoke it if misdirected.
+
+Your colleague opens the link on any device, chooses a username (3-40 letters,
+digits, dots, underscores or hyphens), chooses a password, pairs their own
+authenticator and saves their own recovery codes. Usernames are case-insensitive,
+must start with a letter or digit, and `admin` is reserved. Enrollment setup
+expires after ten minutes; restart it from the invitation if needed. The
+invitation is consumed only after successful authenticator confirmation.
+
+- **Superuser:** sees, downloads and revokes everyone's requests, with the owner
+  shown in the list; creates/revokes invitations and disables colleague accounts.
+- **Colleague:** creates requests and sees/downloads/revokes only their own.
+  Ownership is assigned by the server, not chosen in the browser.
+- **Recipient:** unchanged link-only review/sign/upload, without account creation.
+  A colleague's request link still allows its intended recipient to sign.
+
+Disabling a colleague immediately invalidates their sessions and prevents
+further login. Their requests and completed workbooks are retained for the
+superuser. Existing recipient signing links remain usable until their normal
+expiry or revocation; revoke those requests separately if needed.
+The superuser cannot disable itself. There is no user deletion, re-enabling,
+role reassignment or password/authenticator reset screen yet.
+
+User management requires a fully enrolled superuser session, not the legacy
+setup key. Account authentication stays in `authentication.db`; ownership stays
+in `requests.db`. Back up both databases together before deployment. Schema
+migration runs automatically at startup and preserves original request ownership.
 
 ## Phone links require HTTPS hosting
 

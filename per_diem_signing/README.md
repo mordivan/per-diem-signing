@@ -17,8 +17,10 @@ From the repository root, using its existing virtual environment:
 Subsequent starts do not need `--template`. Open http://127.0.0.1:8200 and complete
 one-time password and authenticator enrollment using the setup key printed in
 the terminal (also in `admin-key.txt` in the private data directory).
-After confirmation the setup key stops authorizing access. Use your password
-and a Microsoft/Google Authenticator code from any device. Save the one-time
+After confirmation the setup key stops authorizing access. Use your username
+(`admin` for the original superuser), password and a Microsoft/Google Authenticator
+code from any device. The superuser can invite colleagues, who see only their
+own requests. Save the one-time
 recovery codes. See [login and recovery details](../README.md#password-and-authenticator-login).
 Stop the server with Ctrl+C.
 

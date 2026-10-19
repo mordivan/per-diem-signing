@@ -11,11 +11,12 @@
   <h1>Per-diem requests</h1>
   <p>Prepare a separate workbook and signing link for each payee. Employee identity is not verified.</p>
   <section id="setup" hidden>
-    <h2>Set up administrator login</h2>
-    <p>Use your existing administrator key once to enroll. After confirmation, only your password plus an authenticator or recovery code will work.</p>
+    <h2 id="setup-title">Set up superuser login</h2>
+    <p id="setup-description">Use your existing administrator key once to enroll as admin. After confirmation, only your password plus an authenticator or recovery code will work.</p>
     <form id="enroll">
-      <label>One-time setup key<input id="key" type="password" required maxlength="256" autocomplete="off"></label>
-      <label>Create administrator password<input id="new-password" type="password" minlength="12" maxlength="128" required autocomplete="new-password"></label>
+      <label id="key-label">One-time setup key<input id="key" type="password" required maxlength="256" autocomplete="off"></label>
+      <label id="join-username-label" hidden>Choose username<input id="join-username" minlength="3" maxlength="40" pattern="[A-Za-z0-9][A-Za-z0-9._\-]*" autocomplete="username"></label>
+      <label>Create password<input id="new-password" type="password" minlength="12" maxlength="128" required autocomplete="new-password"></label>
       <small>Use at least 12 characters. Save it in your password manager.</small>
       <label>Confirm password<input id="confirm-password" type="password" minlength="12" maxlength="128" required autocomplete="new-password"></label>
       <button>Set up authenticator</button>
@@ -35,7 +36,9 @@
     </section>
   </section>
   <form id="login" hidden>
-    <h2>Administrator sign-in</h2>
+    <h2>Account sign-in</h2>
+    <label>Username<input id="username" value="admin" required maxlength="40" autocomplete="username" autocapitalize="off" spellcheck="false"></label>
+    <small>Your original account's username is admin. Colleagues use the username they chose when accepting an invitation.</small>
     <label>Password<input id="password" type="password" required maxlength="128" autocomplete="current-password"></label>
     <label>Authenticator or recovery code<input id="login-code" required maxlength="32" autocomplete="one-time-code" autocapitalize="off" spellcheck="false"></label>
     <small>Enter the current six-digit code, or one unused recovery code. Wait for a new code if you just used the current one.</small>
@@ -52,7 +55,19 @@
   <button id="logout" class="secondary" type="button" hidden>Sign out</button>
   <div id="status" role="status" aria-live="polite"></div>
   <section id="workspace" hidden>
+    <p id="account"></p>
     <p id="network" class="notice"></p>
+    <section id="team" hidden>
+      <h2>Colleague access</h2>
+      <p>You are the superuser and can manage all requests. Colleagues can manage only the requests they create. Invitations expire after 48 hours and work once.</p>
+      <button id="invite" type="button">Create colleague invitation</button>
+      <section id="new-invitation" hidden>
+        <label>Private invitation link<input id="invitation-link" readonly></label>
+        <button id="copy-invitation" type="button">Copy invitation</button>
+        <p>Send this link privately to your colleague. They choose their username, password and authenticator. This does not send an email automatically.</p>
+      </section>
+      <div id="team-list"></div>
+    </section>
     <h2>Prepare a request</h2>
     <form id="create">
       <div class="grid">

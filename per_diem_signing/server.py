@@ -31,7 +31,7 @@ from pydantic import BaseModel, Field
 from starlette.datastructures import UploadFile
 
 from .template import create_blank_template
-from .auth import Authentication
+from .auth import Account, Authentication
 
 LOG = logging.getLogger(__name__)
 MAX_FILE = 10 * 1024 * 1024
@@ -290,11 +290,15 @@ def create_app(data_dir: Path, template: Path | None = None, *,
         admin_key = key_path.read_text(encoding="ascii").strip()
     database = data_dir / "requests.db"
     with connect(database) as db:
+        db.execute("BEGIN IMMEDIATE")
         db.execute("""CREATE TABLE IF NOT EXISTS requests (
             id TEXT PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL, details TEXT NOT NULL,
             created_at TEXT NOT NULL, expires_at TEXT NOT NULL, signed_at TEXT,
             revoked INTEGER NOT NULL DEFAULT 0, filename TEXT, signer_name TEXT,
             output_sha256 TEXT, consent_text TEXT)""")
+        if "owner_id" not in {row["name"] for row in db.execute("PRAGMA table_info(requests)")}:
+            db.execute("ALTER TABLE requests ADD COLUMN owner_id INTEGER NOT NULL DEFAULT 1")
+        db.execute("CREATE INDEX IF NOT EXISTS requests_owner ON requests(owner_id)")
     app = FastAPI(title="Per-diem signing", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.admin_key = admin_key
     authentication = Authentication(data_dir, admin_key, public_url)
@@ -337,20 +341,31 @@ def create_app(data_dir: Path, template: Path | None = None, *,
     def signing_page(token: str):
         return (Path(__file__).parent / "static" / "sign.html").read_text(encoding="utf-8")
 
-    @app.get("/api/admin/requests", dependencies=[Depends(admin)])
-    def list_requests():
+    @app.get("/join/{token}", response_class=HTMLResponse)
+    def join_page(token: str):
+        return (Path(__file__).parent / "static" / "admin.html").read_text(encoding="utf-8")
+
+    @app.get("/api/admin/requests")
+    def list_requests(account: Account = Depends(admin)):
         with connect(database) as db:
-            rows = db.execute("SELECT * FROM requests ORDER BY created_at DESC").fetchall()
+            rows = db.execute("""SELECT * FROM requests WHERE (?=1 OR owner_id=?)
+                ORDER BY created_at DESC""", (int(account.is_superuser), account.id)).fetchall()
+        owners = {}
+        if account.is_superuser:
+            with authentication.db() as db:
+                owners = {row["id"]: row["username"] for row in db.execute("SELECT id, username FROM users")}
         return {"requests": [
             {"id": row["id"], "details": json.loads(row["details"]),
              "created_at": row["created_at"], "expires_at": row["expires_at"],
              "signed_at": row["signed_at"], "revoked": bool(row["revoked"]),
-             "filename": row["filename"], "signer_name": row["signer_name"]}
+             "filename": row["filename"], "signer_name": row["signer_name"],
+             "owner": owners.get(row["owner_id"], account.username)}
             for row in rows], "public_url": public_url,
+            "user": account.public(),
             "local_only": parsed.hostname in {"localhost", "127.0.0.1", "::1"}}
 
-    @app.post("/api/admin/requests", dependencies=[Depends(admin)], status_code=201)
-    def create_request(details: FormDetails):
+    @app.post("/api/admin/requests", status_code=201)
+    def create_request(details: FormDetails, account: Account = Depends(admin)):
         request_id = secrets.token_hex(16)
         token = secrets.token_urlsafe(32)
         now = datetime.now(timezone.utc)
@@ -358,26 +373,27 @@ def create_app(data_dir: Path, template: Path | None = None, *,
         snapshot = data_dir / f"{request_id}.xlsx"
         populate(stored_template, snapshot, details)
         with connect(database) as db:
-            db.execute("INSERT INTO requests (id, token_hash, details, created_at, expires_at)"
-                       " VALUES (?, ?, ?, ?, ?)",
+            db.execute("INSERT INTO requests (id, token_hash, details, created_at, expires_at, owner_id)"
+                       " VALUES (?, ?, ?, ?, ?, ?)",
                        (request_id, hashlib.sha256(token.encode()).hexdigest(),
-                        details.model_dump_json(), now.isoformat(), expires.isoformat()))
+                        details.model_dump_json(), now.isoformat(), expires.isoformat(), account.id))
         return {"id": request_id, "link": f"{public_url.rstrip('/')}/sign/{token}",
                 "expires_at": expires.isoformat()}
 
-    @app.post("/api/admin/requests/{request_id}/revoke", dependencies=[Depends(admin)])
-    def revoke(request_id: str):
+    @app.post("/api/admin/requests/{request_id}/revoke")
+    def revoke(request_id: str, account: Account = Depends(admin)):
         with connect(database) as db:
-            result = db.execute("UPDATE requests SET revoked = 1 WHERE id = ? AND signed_at IS NULL",
-                                (request_id,))
+            result = db.execute("""UPDATE requests SET revoked = 1 WHERE id = ? AND signed_at IS NULL
+                AND (?=1 OR owner_id=?)""", (request_id, int(account.is_superuser), account.id))
             if not result.rowcount:
                 raise HTTPException(404, "No pending request found.")
         return {"revoked": True}
 
-    @app.get("/api/admin/requests/{request_id}/download", dependencies=[Depends(admin)])
-    def download(request_id: str):
+    @app.get("/api/admin/requests/{request_id}/download")
+    def download(request_id: str, account: Account = Depends(admin)):
         with connect(database) as db:
-            record = db.execute("SELECT * FROM requests WHERE id = ?", (request_id,)).fetchone()
+            record = db.execute("SELECT * FROM requests WHERE id = ? AND (?=1 OR owner_id=?)",
+                                (request_id, int(account.is_superuser), account.id)).fetchone()
         if record is None or not record["filename"]:
             raise HTTPException(404, "No signed workbook is available.")
         return FileResponse(data_dir / record["filename"], filename=record["filename"],

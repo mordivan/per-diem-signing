@@ -1,5 +1,6 @@
 "use strict";
 const status = document.querySelector("#status");
+const invitationToken = location.pathname.startsWith("/join/") ? location.pathname.split("/").pop() : null;
 function report(message, error = false) {
   status.textContent = message;
   status.classList.toggle("error", error);
@@ -23,6 +24,9 @@ async function api(path, options = {}) {
 }
 async function refresh() {
   const data = await (await api("/api/admin/requests")).json();
+  document.querySelector("#account").textContent = `Signed in as ${data.user.username} (${data.user.is_superuser ? "superuser - all requests" : "your requests only"})`;
+  document.querySelector("#team").hidden = !data.user.is_superuser;
+  if (data.user.is_superuser) await refreshTeam();
   document.querySelector("#network").textContent = data.local_only
     ? "LOCAL TEST ONLY: these links do not work on another phone. Configure an approved HTTPS public URL before sending them."
     : `Signing address: ${data.public_url}. Verify a link on cellular before sending requests.`;
@@ -31,7 +35,7 @@ async function refresh() {
   for (const item of data.requests) {
     const article = document.createElement("article");
     const title = document.createElement("strong");
-    title.textContent = `${item.details.payee} - Job ${item.details.job_number}`;
+    title.textContent = `${item.details.payee} - Job ${item.details.job_number}${data.user.is_superuser ? ` - Owner: ${item.owner}` : ""}`;
     article.append(title);
     const text = document.createElement("p");
     text.textContent = item.signed_at
@@ -71,6 +75,10 @@ function clearWorkspace() {
   document.querySelector("#link").value = "";
   document.querySelector("#open").removeAttribute("href");
   document.querySelector("#create").reset();
+  document.querySelector("#team").hidden = true;
+  document.querySelector("#team-list").replaceChildren();
+  document.querySelector("#new-invitation").hidden = true;
+  document.querySelector("#invitation-link").value = "";
 }
 function clearPairing() {
   document.querySelector("#pairing").hidden = true;
@@ -106,9 +114,11 @@ submitForm("#enroll", async (form) => {
   if (password !== document.querySelector("#confirm-password").value) {
     throw new Error("Passwords do not match.");
   }
-  const data = await jsonApi("/api/auth/enroll", {
-    key: document.querySelector("#key").value.trim(), password,
-  });
+  const data = invitationToken
+    ? await jsonApi(`/api/auth/invitation/${encodeURIComponent(invitationToken)}/enroll`, {
+      username: document.querySelector("#join-username").value.trim(), password,
+    })
+    : await jsonApi("/api/auth/enroll", { key: document.querySelector("#key").value.trim(), password });
   form.reset();
   form.hidden = true;
   document.querySelector("#qr").src = `data:image/png;base64,${data.qr}`;
@@ -118,20 +128,23 @@ submitForm("#enroll", async (form) => {
 });
 submitForm("#confirm", async () => {
   const data = await jsonApi("/api/auth/confirm", { code: document.querySelector("#setup-code").value });
+  if (invitationToken) history.replaceState(null, "", "/");
   clearPairing();
   document.querySelector("#setup").hidden = true;
   document.querySelector("#recovery-codes").textContent = data.recovery_codes.join("\n");
   document.querySelector("#recovery").hidden = false;
   document.querySelector("#logout").hidden = false;
-  report("Authenticator enabled. The old administrator key is disabled. Save your recovery codes.");
+  report("Your account and authenticator are enabled. Save your recovery codes.");
 });
 document.querySelector("#restart-setup").addEventListener("click", () => {
   clearPairing();
   document.querySelector("#enroll").hidden = false;
-  report("Enter your setup key and password again to generate a new QR code.");
+  report(invitationToken ? "Enter your chosen username and password again to generate a new QR code."
+    : "Enter your setup key and password again to generate a new QR code.");
 });
 submitForm("#login", async (form) => {
   const data = await jsonApi("/api/auth/login", {
+    username: document.querySelector("#username").value.trim(),
     password: document.querySelector("#password").value,
     code: document.querySelector("#login-code").value.trim(),
   });
@@ -207,7 +220,91 @@ document.querySelector("#copy").addEventListener("click", async () => {
     report("Clipboard access unavailable. Select and copy the link manually.", true);
   }
 });
-api("/api/auth/status").then(async (response) => {
+async function refreshTeam() {
+  const data = await (await api("/api/auth/team")).json();
+  const container = document.querySelector("#team-list");
+  container.replaceChildren();
+  for (const user of data.users) {
+    const article = document.createElement("article");
+    const text = document.createElement("p");
+    text.textContent = `${user.username}: ${user.is_superuser ? "Superuser" : user.disabled ? "Disabled" : "Own requests only"}`;
+    article.append(text);
+    if (!user.is_superuser && !user.disabled) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = `Disable ${user.username}`;
+      button.addEventListener("click", async () => {
+        if (!confirm(`Disable ${user.username}? They will be signed out. Their requests will be retained.`)) return;
+        button.disabled = true;
+        try {
+          await jsonApi(`/api/auth/users/${user.id}/disable`, {});
+          await refreshTeam();
+          report(`Disabled ${user.username}. Their requests are retained.`);
+        } catch (error) { button.disabled = false; report(error.message, true); }
+      });
+      article.append(button);
+    }
+    container.append(article);
+  }
+  for (const invitation of data.invitations) {
+    const article = document.createElement("article");
+    const text = document.createElement("p");
+    const expired = invitation.expires * 1000 <= Date.now();
+    text.textContent = `Invitation ${invitation.id.slice(0, 8)}: ${invitation.used_by ? "Accepted" : invitation.revoked ? "Revoked" : expired ? "Expired" : "Pending"}; expires ${new Date(invitation.expires * 1000).toLocaleString()}`;
+    article.append(text);
+    if (!invitation.used_by && !invitation.revoked && !expired) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = "Revoke invitation";
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        try {
+          await jsonApi(`/api/auth/invitations/${invitation.id}/revoke`, {});
+          await refreshTeam();
+          document.querySelector("#new-invitation").hidden = true;
+          document.querySelector("#invitation-link").value = "";
+          report("Invitation revoked.");
+        } catch (error) { button.disabled = false; report(error.message, true); }
+      });
+      article.append(button);
+    }
+    container.append(article);
+  }
+}
+document.querySelector("#invite").addEventListener("click", async (event) => {
+  event.target.disabled = true;
+  try {
+    const data = await jsonApi("/api/auth/invitations", {});
+    document.querySelector("#invitation-link").value = data.link;
+    document.querySelector("#new-invitation").hidden = false;
+    await refreshTeam();
+    report("Invitation created. Copy it now; it cannot be recovered later. Send it only to your intended colleague.");
+  } catch (error) { report(error.message, true); }
+  finally { event.target.disabled = false; }
+});
+document.querySelector("#copy-invitation").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(document.querySelector("#invitation-link").value);
+    report("Invitation copied.");
+  } catch {
+    document.querySelector("#invitation-link").select();
+    report("Clipboard unavailable. Select and copy the invitation manually.", true);
+  }
+});
+async function initialize() {
+  if (invitationToken) {
+    await api(`/api/auth/invitation/${encodeURIComponent(invitationToken)}`);
+    document.querySelector("#setup-title").textContent = "Accept colleague invitation";
+    document.querySelector("#setup-description").textContent = "Create your own account. You can manage only the requests you create; the superuser can see all requests.";
+    document.querySelector("#key-label").hidden = true;
+    document.querySelector("#key").required = false;
+    document.querySelector("#join-username-label").hidden = false;
+    document.querySelector("#join-username").required = true;
+    document.querySelector("#setup").hidden = false;
+    report("Choose your username and password, then pair your authenticator.");
+    return;
+  }
+  const response = await api("/api/auth/status");
   const state = await response.json();
   if (state.authenticated) {
     await enterWorkspace();
@@ -219,4 +316,5 @@ api("/api/auth/status").then(async (response) => {
     document.querySelector("#setup").hidden = false;
     report("One-time administrator setup is required.");
   }
-}).catch((error) => report(`Could not load login status: ${error.message}`, true));
+}
+initialize().catch((error) => report(`Could not load account setup: ${error.message}`, true));
