@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import hmac
 import html
 import io
 import json
@@ -30,6 +29,7 @@ from pydantic import BaseModel, Field
 from starlette.datastructures import UploadFile
 
 from .template import create_blank_template
+from .auth import Authentication
 
 LOG = logging.getLogger(__name__)
 MAX_FILE = 10 * 1024 * 1024
@@ -269,6 +269,8 @@ def create_app(data_dir: Path, template: Path | None = None, *,
             output_sha256 TEXT, consent_text TEXT)""")
     app = FastAPI(title="Per-diem signing", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.admin_key = admin_key
+    authentication = Authentication(data_dir, admin_key, public_url)
+    app.include_router(authentication.router)
     app.add_middleware(BodyLimit)
 
     @app.middleware("http")
@@ -284,10 +286,7 @@ def create_app(data_dir: Path, template: Path | None = None, *,
         )
         return response
 
-    def admin(request: Request) -> None:
-        supplied = request.headers.get("Authorization", "").removeprefix("Bearer ")
-        if not hmac.compare_digest(supplied.encode(), app.state.admin_key.encode()):
-            raise HTTPException(401, "Enter the administrator key shown when the tool starts.")
+    admin = authentication.require_admin
 
     def get_request(token: str, db: sqlite3.Connection):
         digest = hashlib.sha256(token.encode()).hexdigest()

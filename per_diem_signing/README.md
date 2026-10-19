@@ -14,11 +14,13 @@ From the repository root, using its existing virtual environment:
 .\.venv\Scripts\python.exe -m per_diem_signing --template "C:\path\to\Per Diem Form.xlsx"
 ```
 
-Subsequent starts do not need `--template`. Open http://127.0.0.1:8200 and enter
-the administrator key printed in the terminal. Keep that key private; it grants
-access to all requests, signatures and receipt photos. It is stored in
-`admin-key.txt` in the private data directory. The browser keeps it in memory
-only; re-enter it after reloading. Stop the server with Ctrl+C.
+Subsequent starts do not need `--template`. Open http://127.0.0.1:8200 and complete
+one-time password and authenticator enrollment using the setup key printed in
+the terminal (also in `admin-key.txt` in the private data directory).
+After confirmation the setup key stops authorizing access. Use your password
+and a Microsoft/Google Authenticator code from any device. Save the one-time
+recovery codes. See [login and recovery details](../README.md#password-and-authenticator-login).
+Stop the server with Ctrl+C.
 
 If dependencies are missing, install this tool's own manifest:
 

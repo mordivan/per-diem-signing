@@ -23,4 +23,7 @@ article { padding: 15px 0; border-top: 1px solid #ddd; }
 article p { overflow-wrap: anywhere; }
 small { display: block; color: #526372; }
 [hidden] { display: none !important; }
+code { display: block; overflow-wrap: anywhere; user-select: all; padding: 12px; background: #edf2f7; }
+#qr { display: block; max-width: 100%; height: auto; }
+#recovery-codes { user-select: all; overflow-wrap: anywhere; white-space: pre-wrap; }
 @media (max-width: 600px) { main { margin: 0; padding: 16px; border-radius: 0; } .grid { grid-template-columns: 1fr; } }

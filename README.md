@@ -18,8 +18,8 @@ powershell -ExecutionPolicy Bypass -File .\start.ps1
 ```
 
 On first run this creates a virtual environment and installs this project's
-dependencies. Open **http://127.0.0.1:8200** and enter the administrator key shown
-in the terminal. Press Ctrl+C in that terminal to stop the server.
+dependencies. Open **http://127.0.0.1:8200** and complete one-time administrator
+enrollment using the setup key shown in the terminal. Press Ctrl+C to stop.
 
 A blank per-diem template is generated automatically. To use your own original
 **Per Diem Form.xlsx** on first start instead:
@@ -52,8 +52,13 @@ The **Approved By** line is left untouched.
 
 ## Access from a work computer
 
-Clone this private repository using your GitHub account, then use the same
-startup command. A fresh installation starts with the blank template.
+For the existing home-hosted deployment, open
+**https://perdiem.inventorysolution.dev** from any phone or computer. Sign in with
+your administrator password and an authenticator code. No installation needed.
+
+To run an independent installation, clone this private repository using your
+GitHub account, then use the startup command. A fresh installation starts with
+the blank template and its own administrator setup.
 **GitHub contains the application code, not your home PC's requests, secret
 administrator key, receipt photos, company logo or original Outlook attachment.**
 
@@ -61,6 +66,44 @@ Running another copy at work does not synchronize requests with home.
 To access one shared set of real requests, deploy one HTTPS instance on an
 approved host, or use approved remote access to the home PC.
 Check your employer's policy before installing or hosting software.
+
+## Password and authenticator login
+
+1. Open the administrator page. On first enrollment only, enter the existing
+   setup key from `%LOCALAPPDATA%\PerDiemSigning\admin-key.txt`.
+2. Choose a password of at least 12 characters and confirm it.
+3. Scan the QR code in Microsoft Authenticator (**Other account**) or Google
+   Authenticator. On the same phone, add the displayed secret manually as a
+   **time-based** account. Never share the QR code or secret.
+4. Enter the generated six-digit code within 10 minutes to activate login.
+5. Save the ten one-time recovery codes somewhere safe, separate from the phone.
+   They are displayed once; each works only with your password.
+
+After confirmation, the old setup key no longer authorizes access or enrollment.
+From any device use **password + current authenticator code**, or
+**password + an unused recovery code**. Codes cannot be replayed; wait for the
+next code if you just used one. Keep the phone's date/time set automatically.
+The issuer in your authenticator is **Per Diem Signing**, account Administrator.
+This is TOTP, not a Microsoft/Google account sign-in or push notification.
+
+Sessions last eight hours, survive server restarts, and are revoked on Sign out.
+On HTTPS, session cookies are Secure, HttpOnly and SameSite=Strict. No password,
+setup key or session token is stored in browser local storage. After ten failed
+authentication attempts within 15 minutes, new attempts are blocked for up to
+15 minutes. This single-administrator limit is global, not per device.
+Cookies must be enabled. Local HTTP testing uses a separate non-Secure cookie.
+
+Passwords are Argon2id hashes. Recovery codes and session tokens are stored only
+as hashes. The private `authentication.db` stores the TOTP secret so the server
+can verify codes; protect that directory and its backups with OS permissions
+and encryption. There is no email-based reset or self-service authenticator
+replacement yet. If the phone is lost, recovery codes still allow password-based
+login; do not discard them. Losing both your authenticator and recovery codes,
+or forgetting the password, requires deliberate local administrator recovery.
+Do not delete the database as a casual troubleshooting step.
+
+Recipients still use only their private request links; this administrator
+authentication does not verify recipient identity.
 
 ## Phone links require HTTPS hosting
 
@@ -121,9 +164,9 @@ The tunnel's DNS and ingress configuration are machine-specific and are not
 stored in this repository. Cloning at work does not configure another tunnel.
 If public access fails, check the home PC is awake, the `PerDiemSigning` task
 is running, local port 8200 responds, and the `Cloudflared` service is running.
-The administrator key remains required for request creation and downloads;
-recipients use only their unique signing links. Never send the administrator
-key to recipients. Do not apply a Cloudflare Access login wall to recipient
+Password-and-authenticator login protects request creation and downloads after
+one-time enrollment; recipients use only their unique signing links. Never send
+administrator credentials to recipients. Do not apply a Cloudflare Access login wall to recipient
 routes if they must sign without an account.
 
 ## Development and tests
