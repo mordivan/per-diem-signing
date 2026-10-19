@@ -36,7 +36,8 @@ If dependencies are missing, install this tool's own manifest:
    1-30 days, default 7. Lost links cannot be recovered; revoke and create anew.
 3. The recipient reviews a read-only HTML rendering of the populated form,
    adds up to 10 photos, draws a signature, enters their name and agrees.
-4. Submission embeds the signature at B31 and photos on `reciepts`.
+4. Submission embeds the signature at B31 and photos only on `reciepts`,
+   starting at A1 without metadata or captions. Without photos it stays blank.
    The separate **Approved By** line remains untouched.
 5. The sender refreshes the request list and downloads the completed `.xlsx`.
 
@@ -73,7 +74,7 @@ Use the same origin for the preview and signing APIs.
   certification. Anyone holding a link can sign it. Entered names are unverified.
 - Requests, workbooks and normalized photos stay on the hosting computer.
   No third-party service, analytics, fonts or image storage is used.
-- The database stores timestamps, consent version (in source and workbook),
+- The database stores timestamps, consent text,
   entered name and the output SHA-256. This is not an immutable audit service
   or a digital signature on the Excel file.
 - Protect the data directory with Windows account permissions and encrypted

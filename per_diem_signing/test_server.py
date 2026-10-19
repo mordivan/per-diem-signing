@@ -40,6 +40,10 @@ def client(tmp_path):
     book.active.merge_cells("B8:E8")
     book.active.merge_cells("B31:E31")
     book.active.merge_cells("B34:E34")
+    book.active.column_dimensions["B"].width = 9.140625
+    book.active["B12"].number_format = '"$"#,##0.00'
+    book.active.merge_cells("C11:D11")
+    book.active.merge_cells("C12:D12")
     book.active.add_image(ExcelImage(BytesIO(image_bytes())), "A1")
     book.create_sheet("reciepts")
     book.save(template)
@@ -87,13 +91,16 @@ def test_full_workflow_preserves_excel_and_embeds_images(client):
     assert sheet["B8"].value == "Jane Smith"
     assert sheet["B11"].value == 125.5
     assert sheet["B12"].value == 3
+    assert sheet["B12"].number_format == "0"
+    assert sheet["B11"].number_format == '"$"#,##0.00'
+    assert "B11:E11" in sheet.merged_cells
+    assert "B12:E12" in sheet.merged_cells
     assert sheet["B14"].value == "=B11*B12"
     assert sheet["B34"].value is None
     assert len(sheet._images) == 2
     assert len(book["reciepts"]._images) == 2
-    assert "Jane Smith" in book["reciepts"]["A1"].value
-    assert "1042" in book["reciepts"]["A2"].value
-    assert "Identity not verified" in book["reciepts"]["A4"].value
+    assert all(cell.value is None for row in book["reciepts"] for cell in row)
+    assert book["reciepts"]._images[0].anchor._from.row == 0
     assert submit(test, token).status_code == 409
     assert template.read_bytes() == original
     assert test.get(f"/api/admin/requests/{request['id']}/download").status_code == 401
@@ -130,6 +137,11 @@ def test_duplicate_names_separate_requests_and_no_photo_submission(client):
     result2 = submit(test, token2, photos=False)
     assert result1.status_code == result2.status_code == 200
     assert result1.json()["filename"] != result2.json()["filename"]
+    response = test.get(f"/api/admin/requests/{first['id']}/download", headers=AUTH)
+    book = load_workbook(BytesIO(response.content))
+    assert not book["reciepts"]._images
+    assert all(cell.value is None for row in book["reciepts"] for cell in row)
+    book.close()
 
 
 def test_concurrent_submission_only_one_succeeds(client):
@@ -138,6 +150,33 @@ def test_concurrent_submission_only_one_succeeds(client):
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(lambda _: submit(test, token), range(2)))
     assert sorted(result.status_code for result in results) == [200, 409]
+
+
+def test_existing_pending_snapshot_gets_export_format_fix(client):
+    test, directory, _ = client
+    request, token = create(test, {**DETAILS, "daily_amount": "1000000.00", "days": 7})
+    path = directory / f"{request['id']}.xlsx"
+    book = load_workbook(path)
+    sheet = book["Sheet1"]
+    sheet.unmerge_cells("B11:E11")
+    sheet.unmerge_cells("B12:E12")
+    sheet.merge_cells("C11:D11")
+    sheet.merge_cells("C12:D12")
+    sheet["B12"].number_format = '"$"#,##0.00'
+    book.save(path)
+    book.close()
+    assert submit(test, token).status_code == 200
+    response = test.get(f"/api/admin/requests/{request['id']}/download", headers=AUTH)
+    book = load_workbook(BytesIO(response.content))
+    sheet = book["Sheet1"]
+    assert sheet["B11"].value == 1000000
+    assert sheet["B12"].value == 7
+    assert sheet["B12"].number_format == "0"
+    assert "B11:E11" in sheet.merged_cells
+    assert "B12:E12" in sheet.merged_cells
+    assert all(cell.value is None for row in book["reciepts"] for cell in row)
+    assert len(book["reciepts"]._images) == 2
+    book.close()
 
 
 def test_formula_injection_is_literal_and_html_escaped(client):

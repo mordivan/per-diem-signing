@@ -86,6 +86,17 @@ def set_text(cell, value: str) -> None:
     cell.data_type = "s"
 
 
+def format_amounts(sheet) -> None:
+    for row in (11, 12):
+        for region in list(sheet.merged_cells.ranges):
+            if region.min_row == region.max_row == row and 2 <= region.min_col <= region.max_col <= 5:
+                sheet.unmerge_cells(str(region))
+        sheet.merge_cells(start_row=row, start_column=2, end_row=row, end_column=5)
+        sheet.cell(row, 2).alignment = Alignment(horizontal="left", vertical="center")
+    sheet["B11"].number_format = sheet["B14"].number_format = '"$"#,##0.00'
+    sheet["B12"].number_format = "0"
+
+
 def populate(template: Path, output: Path, details: FormDetails) -> None:
     book = load_workbook(template)
     sheet = book["Sheet1"]
@@ -102,7 +113,7 @@ def populate(template: Path, output: Path, details: FormDetails) -> None:
     sheet["B11"] = float(details.daily_amount)
     sheet["B12"] = details.days
     sheet["B14"] = "=B11*B12"
-    sheet["B11"].number_format = sheet["B14"].number_format = '"$"#,##0.00'
+    format_amounts(sheet)
     sheet.row_dimensions[21].height = 90
     book.save(output)
     book.close()
@@ -143,6 +154,7 @@ def finish_workbook(source: Path, target: Path, signature: bytes,
                     photos: list[bytes], name: str, signed_at: str, request_id: str) -> None:
     book = load_workbook(source)
     sheet = book["Sheet1"]
+    format_amounts(sheet)
     sheet.row_dimensions[31].height = 55
     sign = ExcelImage(io.BytesIO(signature))
     scale = min(260 / sign.width, 68 / sign.height)
@@ -152,27 +164,16 @@ def finish_workbook(source: Path, target: Path, signature: bytes,
     set_text(sheet["B32"], f"{name} | {signed_at}")
     sheet["B32"].alignment = Alignment(wrap_text=True, vertical="center")
     receipts = book["reciepts"]
-    set_text(receipts["A1"], f"Payee: {sheet['B8'].value}")
-    set_text(receipts["A2"], f"Job: {sheet['B17'].value}")
-    set_text(receipts["A3"], f"Signed: {signed_at} | Entered name: {name}")
-    set_text(receipts["A4"], f"Request: {request_id} | Identity not verified")
-    set_text(receipts["A5"], CONSENT)
     receipts.column_dimensions["A"].width = 28
-    receipts.merge_cells("A5:H5")
-    receipts["A5"].alignment = Alignment(wrap_text=True)
-    receipts.row_dimensions[5].height = 32
-    row = 7
-    for index, data in enumerate(photos, 1):
-        set_text(receipts.cell(row, 1), f"Receipt photo {index}")
+    row = 1
+    for data in photos:
         photo = ExcelImage(io.BytesIO(data))
         scale = min(650 / photo.width, 850 / photo.height, 1)
         photo.width, photo.height = int(photo.width * scale), int(photo.height * scale)
-        receipts.add_image(photo, f"A{row + 1}")
-        for line in range(row + 1, row + 2 + int(photo.height / 20)):
+        receipts.add_image(photo, f"A{row}")
+        for line in range(row, row + 1 + int(photo.height / 20)):
             receipts.row_dimensions[line].height = 15
         row += 4 + int(photo.height / 20)
-    if not photos:
-        set_text(receipts["A7"], "No receipt photos attached.")
     book.save(target)
     book.close()
 

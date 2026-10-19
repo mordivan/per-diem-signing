@@ -47,7 +47,9 @@ To change templates without disturbing old requests, use a separate data folder:
 4. Refresh the sender page and download the completed workbook.
 
 The employee signature and entered name are added to the form. Photos are
-embedded on **reciepts**, grouped with payee, job number and signing date.
+embedded on **reciepts**, with photos only: no names, dates, labels or other
+metadata printed on that sheet. Without photos the sheet remains blank.
+Daily amount and total use currency formatting; number of days is an integer.
 The **Approved By** line is left untouched.
 
 ## Access from a work computer
