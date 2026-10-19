@@ -12,7 +12,7 @@ if ($Uninstall) {
     Write-Host 'Removed the signing startup task. Private data was retained.'
     exit
 }
-if (-not (Test-Path -LiteralPath (Join-Path $PSScriptRoot '.venv\Scripts\python.exe'))) {
+if (-not (Test-Path -LiteralPath (Join-Path $PSScriptRoot '.venv\Scripts\pythonw.exe'))) {
     throw 'Run start.ps1 first to install dependencies.'
 }
 $uri = [Uri]$PublicUrl
@@ -21,7 +21,7 @@ if ($uri.Scheme -ne 'https' -or $uri.AbsolutePath -ne '/' -or $uri.Query -or
     throw 'PublicUrl must be a plain HTTPS origin.'
 }
 $user = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-$python = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
+$python = Join-Path $PSScriptRoot '.venv\Scripts\pythonw.exe'
 $data = Join-Path $env:LOCALAPPDATA 'PerDiemSigning'
 $log = Join-Path $data 'server.log'
 $arguments = "-m per_diem_signing --public-url `"$PublicUrl`" --port $Port --data-dir `"$data`" --no-key-output --log-file `"$log`""

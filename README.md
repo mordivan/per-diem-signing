@@ -152,7 +152,8 @@ after failures. It does not run before sign-in. Cloudflare's separate Windows
 service starts at boot. The tool stays bound to loopback; no router port
 forwarding is needed. Private data stays in `%LOCALAPPDATA%\PerDiemSigning`.
 Diagnostics go to the rotating `server.log` there; the administrator key is not
-logged. Task Scheduler runs the Python server directly so stopping or restarting
+logged. Task Scheduler runs windowless `pythonw.exe` directly, so no terminal
+opens at sign-in. Stopping or restarting
 the task does not leave an orphaned server holding its port.
 Do not run `start.ps1` concurrently with the installed task on the same port.
 
