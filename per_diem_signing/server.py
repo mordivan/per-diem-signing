@@ -17,6 +17,8 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from urllib.parse import urlsplit
+from xml.etree import ElementTree
+from zipfile import ZipFile
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
@@ -97,6 +99,31 @@ def format_amounts(sheet) -> None:
     sheet["B12"].number_format = "0"
 
 
+def save_with_total(book, output: Path) -> None:
+    sheet = book["Sheet1"]
+    total = Decimal(str(sheet["B11"].value)) * Decimal(str(sheet["B12"].value))
+    sheet["B14"] = "=B11*B12"
+    buffer = io.BytesIO()
+    book.save(buffer)
+    # openpyxl writes formulas without cached results; phone viewers may not recalculate.
+    worksheet_path = f"xl/worksheets/sheet{book.index(sheet) + 1}.xml"
+    namespace = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+    with ZipFile(buffer) as source, ZipFile(output, "w") as destination:
+        for entry in source.infolist():
+            data = source.read(entry.filename)
+            if entry.filename == worksheet_path:
+                root = ElementTree.fromstring(data)
+                cell = root.find(f".//{namespace}c[@r='B14']")
+                if cell is None:
+                    raise ValueError("The amount cell is missing from the generated workbook.")
+                value = cell.find(f"{namespace}v")
+                if value is None:
+                    value = ElementTree.SubElement(cell, f"{namespace}v")
+                value.text = format(total, ".2f")
+                data = ElementTree.tostring(root, encoding="utf-8")
+            destination.writestr(entry, data)
+
+
 def populate(template: Path, output: Path, details: FormDetails) -> None:
     book = load_workbook(template)
     sheet = book["Sheet1"]
@@ -115,7 +142,7 @@ def populate(template: Path, output: Path, details: FormDetails) -> None:
     sheet["B14"] = "=B11*B12"
     format_amounts(sheet)
     sheet.row_dimensions[21].height = 90
-    book.save(output)
+    save_with_total(book, output)
     book.close()
 
 
@@ -174,7 +201,7 @@ def finish_workbook(source: Path, target: Path, signature: bytes,
         for line in range(row, row + 1 + int(photo.height / 20)):
             receipts.row_dimensions[line].height = 15
         row += 4 + int(photo.height / 20)
-    book.save(target)
+    save_with_total(book, target)
     book.close()
 
 

@@ -50,6 +50,8 @@ The employee signature and entered name are added to the form. Photos are
 embedded on **reciepts**, with photos only: no names, dates, labels or other
 metadata printed on that sheet. Without photos the sheet remains blank.
 Daily amount and total use currency formatting; number of days is an integer.
+The total includes a saved calculated value for phone and preview viewers that
+do not recalculate formulas; the Excel formula is preserved.
 The **Approved By** line is left untouched.
 
 ## Access from a work computer

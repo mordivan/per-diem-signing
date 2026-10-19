@@ -101,6 +101,9 @@ def test_full_workflow_preserves_excel_and_embeds_images(client):
     assert len(book["reciepts"]._images) == 2
     assert all(cell.value is None for row in book["reciepts"] for cell in row)
     assert book["reciepts"]._images[0].anchor._from.row == 0
+    cached = load_workbook(BytesIO(response.content), data_only=True)
+    assert cached["Sheet1"]["B14"].value == 376.5
+    cached.close()
     assert submit(test, token).status_code == 409
     assert template.read_bytes() == original
     assert test.get(f"/api/admin/requests/{request['id']}/download").status_code == 401
@@ -177,6 +180,28 @@ def test_existing_pending_snapshot_gets_export_format_fix(client):
     assert all(cell.value is None for row in book["reciepts"] for cell in row)
     assert len(book["reciepts"]._images) == 2
     book.close()
+
+
+@pytest.mark.parametrize(("daily", "days", "total"), [
+    ("200.00", 7, 1400), ("125.50", 3, 376.5), ("0.01", 3, 0.03),
+    ("1000000.00", 366, 366000000),
+])
+def test_total_is_cached_for_viewers_without_recalculation(client, daily, days, total):
+    test, directory, _ = client
+    request, token = create(test, {**DETAILS, "daily_amount": daily, "days": days})
+    cached = load_workbook(directory / f"{request['id']}.xlsx", data_only=True)
+    assert cached["Sheet1"]["B14"].value == total
+    cached.close()
+    assert submit(test, token, photos=False).status_code == 200
+    response = test.get(f"/api/admin/requests/{request['id']}/download", headers=AUTH)
+    cached = load_workbook(BytesIO(response.content), data_only=True)
+    assert cached["Sheet1"]["B14"].value == total
+    assert cached["Sheet1"]["B11"].value == float(daily)
+    assert cached["Sheet1"]["B12"].value == days
+    cached.close()
+    formulas = load_workbook(BytesIO(response.content))
+    assert formulas["Sheet1"]["B14"].value == "=B11*B12"
+    formulas.close()
 
 
 def test_formula_injection_is_literal_and_html_escaped(client):

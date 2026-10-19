@@ -53,7 +53,8 @@ HEIC must be converted to JPG before attaching. Images are decoded, oriented,
 resized to at most 1800 pixels and re-encoded without original photo metadata.
 The form preview covers the known template, not arbitrary workbooks or Excel
 print fidelity; verify the supplied template's preview and exported file before
-using real requests. The total formula is retained for recalculation in Excel.
+using real requests. The total formula is retained with a cached calculated
+result, so viewers without formula recalculation also display the amount.
 
 ## Phone access and deployment
 
