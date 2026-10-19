@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "per-diem-signing"
+version = "0.1.0"
+description = "Phone-browser signatures and receipt photos in per-payee Excel workbooks"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115,<1.0",
+    "uvicorn>=0.30,<1.0",
+    "python-multipart>=0.0.9,<1.0",
+    "openpyxl>=3.1,<4.0",
+    "Pillow>=10.4,<13.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<9", "httpx>=0.27,<1"]
+
+[project.scripts]
+per-diem-signing = "per_diem_signing.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["per_diem_signing*"]
+
+[tool.setuptools.package-data]
+per_diem_signing = ["static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["per_diem_signing"]

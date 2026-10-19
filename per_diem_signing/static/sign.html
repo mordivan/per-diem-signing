@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Review and sign per-diem request</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/sign.js" defer></script>
+</head>
+<body><main>
+  <h1>Review and sign</h1>
+  <p class="notice">This link does not verify your identity. Do not forward it. Review all details before signing. Contact the sender if anything needs correcting.</p>
+  <div id="status" role="status" aria-live="polite">Loading request...</div>
+  <section id="content" hidden>
+    <h2 id="heading"></h2>
+    <p>The read-only preview can be scrolled sideways on a phone. It represents the form data and layout; Excel printing may differ.</p>
+    <iframe id="preview" title="Read-only per-diem spreadsheet" sandbox="allow-same-origin"></iframe>
+    <form id="sign">
+      <h2>Receipt photos</h2>
+      <p>Up to 10 photos, 10 MB each, 50 MB total. Use JPG, PNG, or WebP. Convert HEIC photos to JPG first. Photos will be embedded on the workbook's reciepts sheet.</p>
+      <label>Add from photo library<input id="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>
+      <label>Take a photo<input id="camera" type="file" accept="image/*" capture="environment"></label>
+      <div id="photo-list" class="photos"></div>
+      <h2>Your signature</h2>
+      <label>Your name<input id="name" required maxlength="100" autocomplete="name"></label>
+      <p>Draw with your finger in the box below.</p>
+      <canvas id="signature" width="900" height="300" aria-label="Draw your signature"></canvas>
+      <button id="clear" class="secondary" type="button">Clear signature</button>
+      <label><input id="consent" type="checkbox" required> <span id="consent-text"></span></label>
+      <button id="submit" type="submit">Agree and submit</button>
+    </form>
+  </section>
+</main></body></html>

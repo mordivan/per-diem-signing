@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Per-diem requests</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/admin.js" defer></script>
+</head>
+<body><main>
+  <h1>Per-diem requests</h1>
+  <p>Prepare a separate workbook and signing link for each payee. Employee identity is not verified.</p>
+  <form id="login">
+    <label>Administrator key<input id="key" type="password" required autocomplete="off"></label>
+    <button>Unlock</button>
+  </form>
+  <div id="status" role="status" aria-live="polite"></div>
+  <section id="workspace" hidden>
+    <p id="network" class="notice"></p>
+    <h2>Prepare a request</h2>
+    <form id="create">
+      <div class="grid">
+        <label>Payee<input name="payee" required maxlength="100"></label>
+        <label>Job number<input name="job_number" required maxlength="60"></label>
+        <label>Amount per day ($)<input name="daily_amount" type="number" min="0.01" max="1000000" step="0.01" required></label>
+        <label>Number of days<input name="days" type="number" min="1" max="366" step="1" required></label>
+      </div>
+      <label>Place of travel<input name="travel_place" required maxlength="120"></label>
+      <label>Purpose of travel<textarea name="purpose" required maxlength="200"></textarea></label>
+      <label><input name="hotel" type="checkbox"> Covers hotel</label>
+      <label><input name="meals" type="checkbox" checked> Covers meals and incidentals</label>
+      <label>Link expires in days<input name="expires_days" type="number" min="1" max="30" value="7" required></label>
+      <button>Create signing link</button>
+    </form>
+    <section id="created" hidden>
+      <h2>New private link</h2>
+      <p>Copy this link now. It is not stored in recoverable form. Anyone with it can sign this request.</p>
+      <input id="link" readonly aria-label="Signing link">
+      <button id="copy" type="button">Copy link</button>
+      <a id="open" target="_blank" rel="noopener noreferrer">Open signing page</a>
+    </section>
+    <h2>Requests</h2><button id="refresh" type="button">Refresh</button>
+    <div id="requests"></div>
+  </section>
+</main></body></html>
