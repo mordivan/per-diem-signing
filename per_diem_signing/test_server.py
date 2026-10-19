@@ -203,3 +203,24 @@ def test_upload_limits(client):
     response = test.post("/api/admin/requests", headers={**AUTH, "Content-Type": "application/json"},
                          content=b" " * (52 * 1024 * 1024 + 1))
     assert response.status_code == 413
+
+
+def test_background_cli_keeps_key_out_of_logs(tmp_path, monkeypatch, capsys):
+    from per_diem_signing import __main__
+
+    options = {}
+    monkeypatch.setattr("sys.argv", [
+        "per-diem-signing", "--data-dir", str(tmp_path / "private"),
+        "--public-url", "https://perdiem.example.test",
+        "--no-key-output", "--log-file", str(tmp_path / "private" / "server.log"),
+    ])
+    monkeypatch.setattr(__main__.uvicorn, "run",
+                        lambda app, **kwargs: options.update(kwargs))
+    __main__.main()
+    output = capsys.readouterr().out
+    key = (tmp_path / "private" / "admin-key.txt").read_text()
+    assert key not in output
+    assert "Administrator key:" not in output
+    assert options["host"] == "127.0.0.1"
+    assert options["access_log"] is False
+    assert options["log_config"]["handlers"]["file"]["maxBytes"] == 5 * 1024 * 1024

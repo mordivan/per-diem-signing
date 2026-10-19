@@ -89,6 +89,43 @@ Keep the hosting PC awake and test a signing link on cellular before rollout.
 
 See [detailed operation and privacy notes](per_diem_signing/README.md).
 
+## Home-PC deployment through Cloudflare Tunnel
+
+The configured public address is **https://perdiem.inventorysolution.dev**.
+The home PC remains the host; Cloudflare provides HTTPS and forwards only this
+hostname to `http://127.0.0.1:8200`. Inventory routes are independent.
+Keep the PC awake, online and signed into the Windows account that runs the tool.
+
+After dependencies are installed, install or update automatic startup with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install-startup.ps1
+```
+
+The `PerDiemSigning` Windows task starts now and at **user sign-in**, with retries
+after failures. It does not run before sign-in. Cloudflare's separate Windows
+service starts at boot. The tool stays bound to loopback; no router port
+forwarding is needed. Private data stays in `%LOCALAPPDATA%\PerDiemSigning`.
+Diagnostics go to the rotating `server.log` there; the administrator key is not
+logged. Task Scheduler runs the Python server directly so stopping or restarting
+the task does not leave an orphaned server holding its port.
+Do not run `start.ps1` concurrently with the installed task on the same port.
+
+To stop and remove automatic startup without deleting data:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install-startup.ps1 -Uninstall
+```
+
+The tunnel's DNS and ingress configuration are machine-specific and are not
+stored in this repository. Cloning at work does not configure another tunnel.
+If public access fails, check the home PC is awake, the `PerDiemSigning` task
+is running, local port 8200 responds, and the `Cloudflared` service is running.
+The administrator key remains required for request creation and downloads;
+recipients use only their unique signing links. Never send the administrator
+key to recipients. Do not apply a Cloudflare Access login wall to recipient
+routes if they must sign without an account.
+
 ## Development and tests
 
 ```powershell
